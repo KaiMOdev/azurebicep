@@ -96,6 +96,11 @@ jobs:
         uses: microsoft/ps-rule@v2
         with:
           modules: PSRule.Rules.Azure
+          # Explicit options file path. Without this, the action auto-discovers
+          # `.ps-rule/ps-rule.yaml` but input.pathIgnore is silently dropped
+          # when `inputPath:` is also set. Pointing directly at the file
+          # restores the expected behaviour.
+          option: .ps-rule/ps-rule.yaml
           inputPath: generated-${{ matrix.environment }}/
           outputFormat: Markdown
           outputPath: psrule-${{ matrix.environment }}.md
