@@ -16,6 +16,9 @@ spec:
   rule:
     - Azure.ACR.GeoReplica
     - Azure.ACR.ExportPolicy
+  # PSRule selector expression: `name: '.'` means "this target's name", and
+  # the operator (`startsWith:`) sits at the same level. Previous attempt
+  # nested the operator inside name and failed YAML schema validation.
   if:
-    name:
-      startsWith: 'acrcitestdev'
+    name: '.'
+    startsWith: 'acrcitestdev'
