@@ -112,20 +112,20 @@ const ENV_DEFAULTS = {
     dnsServiceIP: '10.200.0.10',
     systemNodeVmSize: 'Standard_D2s_v5',
     systemAutoscaling: false,
-    systemNodeCount: 1,
-    systemNodeMinCount: 1,
-    systemNodeMaxCount: 3,
+    systemNodeCount: 3,
+    systemNodeMinCount: 3,
+    systemNodeMaxCount: 5,
     userNodeVmSize: 'Standard_D4s_v5',
     userAutoscaling: false,
-    userNodeCount: 1,
-    userNodeMinCount: 1,
+    userNodeCount: 3,
+    userNodeMinCount: 3,
     userNodeMaxCount: 5,
     osDiskType: 'Ephemeral',
     osDiskSizeGB: 30,
     availabilityZones: [],
     upgradeChannel: 'patch',
     nodeOSUpgradeChannel: 'NodeImage',
-    maxPodsPerNode: 30,
+    maxPodsPerNode: 50,
     deployAcr: true,
     acrSku: 'Standard',
     deployKeyVault: true,
@@ -150,20 +150,20 @@ const ENV_DEFAULTS = {
     dnsServiceIP: '10.200.0.10',
     systemNodeVmSize: 'Standard_D2s_v5',
     systemAutoscaling: false,
-    systemNodeCount: 2,
-    systemNodeMinCount: 2,
+    systemNodeCount: 3,
+    systemNodeMinCount: 3,
     systemNodeMaxCount: 5,
     userNodeVmSize: 'Standard_D4s_v5',
     userAutoscaling: false,
-    userNodeCount: 2,
-    userNodeMinCount: 2,
+    userNodeCount: 3,
+    userNodeMinCount: 3,
     userNodeMaxCount: 8,
     osDiskType: 'Ephemeral',
     osDiskSizeGB: 30,
     availabilityZones: ['1', '2', '3'],
     upgradeChannel: 'stable',
     nodeOSUpgradeChannel: 'NodeImage',
-    maxPodsPerNode: 30,
+    maxPodsPerNode: 50,
     deployAcr: true,
     acrSku: 'Premium',
     deployKeyVault: true,
@@ -1327,6 +1327,28 @@ var aksNsgName = 'nsg-aks-\${customerName}-\${environment}'
 var servicesNsgName = 'nsg-services-\${customerName}-\${environment}'
 var peNsgName = 'nsg-pe-\${customerName}-\${environment}'
 
+// Outbound management-port deny rule reused across all three NSGs.
+// Satisfies Azure.NSG.LateralTraversal — blocks SSH, RDP, and WinRM to any
+// destination from the subnet, preventing east-west lateral traversal.
+var denyLateralManagement = {
+  name: 'DenyLateralManagement'
+  properties: {
+    priority: 200
+    direction: 'Outbound'
+    access: 'Deny'
+    protocol: '*'
+    sourceAddressPrefix: '*'
+    sourcePortRange: '*'
+    destinationAddressPrefix: '*'
+    destinationPortRanges: [
+      '22'
+      '3389'
+      '5985'
+      '5986'
+    ]
+  }
+}
+
 resource aksNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: aksNsgName
   location: location
@@ -1372,6 +1394,7 @@ resource aksNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           destinationPortRange: '*'
         }
       }
+      denyLateralManagement
     ]
   }
 }
@@ -1408,6 +1431,7 @@ resource servicesNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           destinationPortRange: '*'
         }
       }
+      denyLateralManagement
     ]
   }
 }
@@ -1444,6 +1468,7 @@ resource peNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           destinationPortRange: '*'
         }
       }
+      denyLateralManagement
     ]
   }
 }
@@ -1538,6 +1563,27 @@ resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
     adminUserEnabled: false
     publicNetworkAccess: acrSku == 'Premium' ? 'Disabled' : 'Enabled'
     zoneRedundancy: acrSku == 'Premium' && environment == 'prod' ? 'Enabled' : 'Disabled'
+    // Disable artifact export to reduce data exfiltration surface
+    // (satisfies Azure.ACR.ExportPolicy). Only valid on Premium.
+    policies: acrSku == 'Premium' ? {
+      exportPolicy: {
+        status: 'disabled'
+      }
+    } : null
+  }
+}
+
+// Geo-replication for prod/acc Premium registries. Cross-region redundancy
+// satisfies Azure.ACR.GeoReplica and keeps image pulls available during a
+// region-level outage. One pair (westeurope, northeurope) for cost control;
+// add more replicas in a separate PR if global reach is needed.
+resource acrGeoReplica 'Microsoft.ContainerRegistry/registries/replications@2025-04-01' = if (acrSku == 'Premium' && (environment == 'prod' || environment == 'acc')) {
+  parent: acr
+  name: 'northeurope'
+  location: 'northeurope'
+  tags: tags
+  properties: {
+    zoneRedundancy: environment == 'prod' ? 'Enabled' : 'Disabled'
   }
 }
 
@@ -1701,6 +1747,13 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
       name: 'PerGB2018'
     }
     retentionInDays: retentionDays
+    // Enable workspace replication to a secondary region for prod/acc (HA
+    // requirement, satisfies Azure.Log.Replication). Dev stays single-region
+    // to keep costs minimal.
+    replication: environment == 'prod' || environment == 'acc' ? {
+      enabled: true
+      location: 'northeurope'
+    } : null
   }
 }
 
