@@ -14,8 +14,12 @@ input:
   # Skip standalone module files. Modules are only valid when invoked from
   # main.bicep with concrete parameters from a .bicepparam file. Scanning
   # them standalone produces spurious "parameter X was not set" errors.
+  # Glob is evaluated relative to the scanned root (inputPath), so the
+  # leading `**/` used previously was unnecessary and stopped matching when
+  # the action normalised paths against inputPath.
   pathIgnore:
-    - '**/modules/**/*.bicep'
+    - 'modules/**'
+    - '**/modules/**'
 
 # Suppressions for PSRule.Rules.Azure rules that predate the AKS
 # 2025-10-01 schema. Each rule below is checking a legacy property shape
@@ -87,3 +91,21 @@ suppression:
     - vnet-citest-dev
     - vnet-citest-acc
     - vnet-citest-prod
+
+  # main.bicep is subscription-scoped and contains only module invocations
+  # (Microsoft.Resources/deployments). PSRule's Azure.Template.Resources
+  # rule does not count deployment objects as "resources" and fires a
+  # false positive on every generated main.json. Suppress on the
+  # deterministic test-fixture filename pattern.
+  Azure.Template.Resources:
+    - generated-dev/main.json
+    - generated-acc/main.json
+    - generated-prod/main.json
+
+  # Same reasoning as Azure.Template.Resources — @description on modules
+  # doesn't flow into the compiled ARM /resources[] array the way this
+  # rule expects. The underlying .bicep files carry descriptions.
+  Azure.Template.UseDescriptions:
+    - generated-dev/main.json
+    - generated-acc/main.json
+    - generated-prod/main.json
