@@ -612,6 +612,9 @@ type aksConfigType = {
 
   @description('Node OS disk size in GB')
   osDiskSizeGB: int
+
+  @description('Max pods per node (PSRule.Azure.AKS.NodeMinPods wants >= 50 for efficient utilisation; 110 is AKS default with Overlay)')
+  maxPodsPerNode: int
 }
 
 @export()
@@ -838,6 +841,7 @@ module aks 'modules/aks/aksCluster.bicep' = {
     nodeOSUpgradeChannel: aksConfig.nodeOSUpgradeChannel
     osDiskType: aksConfig.osDiskType
     osDiskSizeGB: aksConfig.osDiskSizeGB
+    maxPodsPerNode: aksConfig.maxPodsPerNode
     adminGroupObjectIds: adminGroupObjectIds
   }
 }
@@ -1000,6 +1004,11 @@ param osDiskType string = 'Ephemeral'
 @minValue(30)
 param osDiskSizeGB int = 30
 
+@description('Max pods per node (AKS hard cap is 250 on Overlay; 110 is Azure default)')
+@minValue(30)
+@maxValue(250)
+param maxPodsPerNode int = 50
+
 @description('Azure AD admin group object IDs for cluster admin access')
 param adminGroupObjectIds array
 
@@ -1067,6 +1076,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2025-10-01' = {
         osSKU: 'AzureLinux'
         osDiskType: osDiskType
         osDiskSizeGB: osDiskSizeGB
+        maxPods: maxPodsPerNode
         vnetSubnetID: aksSubnetId
         enableAutoScaling: true
         minCount: systemNodeMinCount
@@ -1085,6 +1095,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2025-10-01' = {
         osSKU: 'AzureLinux'
         osDiskType: osDiskType
         osDiskSizeGB: osDiskSizeGB
+        maxPods: maxPodsPerNode
         vnetSubnetID: aksSubnetId
         enableAutoScaling: true
         minCount: userNodeMinCount
@@ -3764,6 +3775,7 @@ function generateBicepParam(s) {
   lines.push('  nodeOSUpgradeChannel: ' + bicepString(s.nodeOSUpgradeChannel || 'NodeImage'));
   lines.push('  osDiskType: ' + bicepString(s.osDiskType || 'Ephemeral'));
   lines.push('  osDiskSizeGB: ' + (s.osDiskSizeGB || 30));
+  lines.push('  maxPodsPerNode: ' + (s.maxPodsPerNode || 50));
   lines.push('}');
   lines.push('');
 

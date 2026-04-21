@@ -84,10 +84,20 @@ suppression:
   Azure.Log.Replication:
     # Workspace replication is enabled for acc/prod only.
     - log-citest-dev
-  Azure.ACR.GeoReplica:
-    # Cross-region replica is created only for Premium + acc/prod.
-    # ACR fixture name uses uniqueString() so glob-match the dev prefix.
-    - acrcitestdev*
+  Azure.AKS.UptimeSLA:
+    # Dev cluster runs with sku.tier: 'Free' for cost control — Free has no
+    # uptime SLA by design. acc/prod use Standard and satisfy the rule.
+    - aks-citest-dev
+  Azure.AKS.AuthorizedIPs:
+    # Test fixture leaves apiServerAuthorizedIPs empty on the public dev
+    # cluster. Real dev deployments should populate the field; the fixture
+    # exists to validate the template shape, not a specific IP allow-list.
+    - aks-citest-dev
+
+  # Azure.ACR.GeoReplica / ExportPolicy suppression cannot list a literal
+  # target name here — the generated ACR uses uniqueString(resourceGroup().id)
+  # so the hash suffix varies per PSRule run. See .ps-rule/suppression-groups.Rule.yaml
+  # for the name-pattern suppression.
 
   # Azure.VNET.PrivateSubnet — the AKS cluster uses outboundType:
   # 'managedNATGateway', which makes Azure auto-provision a NAT gateway in
