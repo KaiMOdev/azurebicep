@@ -3000,7 +3000,7 @@ function renderStep3() {
   return '<h2 class="text-xl font-bold text-gray-800 mb-1">Step 3: Networking</h2>' +
     '<p class="text-sm text-gray-500 mb-6">Configure VNet, subnets, and cluster networking parameters.</p>' +
 
-    infoPanel('Network plugin: Azure CNI. Network policy: Azure. Outbound: Load Balancer. These are hardcoded in the current Bicep modules.') +
+    infoPanel('Network plugin: Azure CNI Overlay (Cilium dataplane). Network policy: Cilium. Outbound: managed NAT Gateway. These are hardcoded in the Bicep modules.') +
     '<div class="mb-6"></div>' +
 
     fieldRow('VNet Address Prefix',
